@@ -97,7 +97,7 @@ uint8_t spi_send_recv(uint8_t data) {
 }
 
 void display_init(void) {
-        DISPLAY_CHANGE_TO_COMMAND_MODE;
+  DISPLAY_CHANGE_TO_COMMAND_MODE;
 	quicksleep(10);
 	DISPLAY_ACTIVATE_VDD;
 	quicksleep(1000000);
@@ -145,7 +145,7 @@ void display_image(int x, const uint8_t *data) {
 	int i, j;
 	
 	for(i = 0; i < 4; i++) {
-		DISPLAY_CHANGE_TO_COMMAND_MODE;
+		DISPLAY_CHANGE_TO_COMMAND_MODE;-
 
 		spi_send_recv(0x22);
 		spi_send_recv(i);

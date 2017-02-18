@@ -1,0 +1,7 @@
+PIC32MX320F128H
+A2-RE3/PMD3
+PORTE skall vara input,
+alltså TRISE skall vara 0x1000
+RE3 är PORTE 0x1000
+
+något om ADC : http://ww1.microchip.com/downloads/en/DeviceDoc/61104E.pdf
