@@ -1,6 +1,8 @@
 #include <pic32mx.h>	/* Declarations of system-specific addresses etc */
 #include <stdint.h>		/* Declarations of uint_32 and the like */
 #include "mipslab.h"	/* Declatations for these labs */
+//#include <plib.h>
+//#include <nu32.h>
 char textbuffer[4][16];
 
 const uint8_t const font[] = {
@@ -198,6 +200,30 @@ void initiatePorts(){
 
 	/* Copy-Paste slutar */
 }
+void initadc(int channel){
+	AD1CHSbits.CHOSA =channel; //select which channel to sample
+	AD1PCFGCLR = 3 << channel; //stod1 istället för 3 färut configure pin for this channel to analog input
+
+	//AD1CON1bits.ON = 1; //turn ADC on
+	//AD1CON1bits.SAMP = 1; //begin sampling
+	//AD1CON1bits.DONE = 0; // clear done-flag
+}
+int analogRead(char analogPIN){
+    AD1CHS = analogPIN << 16;       // AD1CHS<16:19> controls which analog pin goes to the ADC
+ 
+    AD1CON1bits.SAMP = 1;           // Begin sampling
+    while( AD1CON1bits.SAMP );      // wait until acquisition is done
+    while( ! AD1CON1bits.DONE );    // wait until conversion done
+ 
+    return ADC1BUF0;                // result stored in ADC1BUF0
+}
+void adcConfigureManual(){
+    AD1CON1CLR = 0x8000;    // disable ADC before configuration
+ 
+    AD1CON1 = 0x00E0;       // internal counter ends sampling and starts conversion (auto-convert), manual sample
+    AD1CON2 = 0;            // AD1CON2<15:13> set voltage reference to pins AVSS/AVDD
+    AD1CON3 = 0x0f01;       // TAD = 4*TPB, acquisition time = 15*TAD 
+}
 
 /* Copy-paste från labb 3 börjar */
 /* Declare a helper function which is local to this file */
@@ -367,13 +393,18 @@ int getbtns(void){
 int humidity(){
 	//int bla = PORTE >> 4;
 	//bla = bla & 0xA;
-	int bla = PORTE;
-	return bla;
+	int value;
+	value = analogRead(3); //Kalla på RB1 (AN3) där fuktighetsmodulen är inkopplad.
+	return value;
 }
 int main() {
 	initiatePorts();
 	displayWelcome();
 	int derp = 0;
+	ANSELBbits.ANSB1 = 1;   // set RB3 (AN5) to analog
+    TRISBbits.TRISB1 = 1;   // set RB3 as an input
+    adcConfigureManual();
+    AD1CON1SET = 0x8000;
 
 	while(1){
 		//display_string(3, itoaconv(derp));
