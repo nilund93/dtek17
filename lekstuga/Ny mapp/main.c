@@ -204,13 +204,11 @@ void initadc(int channel){
 	//AD1CHSbits.CHOSA =channel; //select which channel to sample
 	//int maskchannel = channel << 16;
 	//AD1CHS= AD1CHS|maskchannel;
-	AD1CHS = AD1CHS|(channel << 16); //set  = channel
+	AD1CHS = AD1CHS|(channel << 16);
 	AD1PCFGCLR = 1 << channel; //configure pin for this channel to analog input
-	AD1CON1 = AD1CON1|0x8;	//On-bit
-	AD1CON1 = AD1CON1|0x2;	//Sample-bit
-	AD1CON1 &= ~0x01; //Done-bit
-	AD1CON2 = 0x0;
-	AD1CON3 |= (0x1 << 15);
+	AD1CON1 = AD1CON1|0xF;
+	AD1CON1 = AD1CON1|0x2;
+	AD1CON1 &= ~0x01; 
 	//AD1CON1bits.ON = 1; //turn ADC on
 	//AD1CON1bits.SAMP = 1; //begin sampling
 	//AD1CON1bits.DONE = 0; // clear done-flag
@@ -411,25 +409,64 @@ int humidity(){
 int main() {
 	initiatePorts();
 	displayWelcome();
-	int derp = 0;
-	//ANSELBbits.ANSB1 = 1;   // set RB3 (AN5) to analog, onödig för vårt kort
-    //TRISBbits.TRISB1 = 1;   // set RB3 as an input
-    //TRISB = TRISB|0x8;   // set RB5 as an input since RB5 is TRISB5
-    initadc(5); //Vill ha channel
-    //adcConfigureManual();
-    AD1CON1SET = 0x8000;
-    quicksleep(100000);
-	while(1){
-		//display_string(3, itoaconv(derp));
-		display_string(2, itoaconv(PORTB));
-		display_string(3, itoaconv(readadc()));
-		display_update();
-		quicksleep(100000);
-		derp++;
-		//humidity();
-		//checkTime();
-		//displayLights();
-		//displayMessage();
+	AD1PCFG = 0x0000; /* Configure ADC port
+	all input pins are analog */
+	AD1CON1 = 0x2208; /* Configure sample clock source and Conversion Trigger mode.
+	 Unsigned Fractional format, Manual conversion trigger,
+	 Manual start of sampling, Simultaneous sampling,
+	 No operation in IDLE mode. */
+	AD1CON2 = 0x0000; /* Configure ADC voltage reference
+	and buffer fill modes.
+	VREF from AVDD and AVSS,
+	Inputs are not scanned,
+	Interrupt every sample */
+
+	AD1CON3 = 0x0000; /* Configure ADC conversion clock */
+
+	AD1CHS = 0x0000; /* Configure input channels,
+	CH0+ input is AN0.
+	CHO- input is VREFL (AVss)
+	AD1CSSL = 0x0000; /* No inputs are scanned.
+	Note: Contents of AD1CSSL are ignored when CSCNA = 0 */
+	IFS1CLR = 2; /*Clear ADC conversion interrupt*/
+	// Configure ADC interrupt priority bits (AD1IP<2:0>) here, if
+	// required. (default priority level is 4)
+	IEC1SET = 2; /* Enable ADC conversion interrupt*/
+
+	AD1CON1SET = 0x8000; /* Turn on the ADC module */
+	AD1CON1SET = 0x0002; /* Start sampling the input */
+	DelayNmSec(100); /* Ensure the correct sampling time has elapsed before
+	starting a conversion.*/
+
+	AD1CON1CLR = 0x0002; /* End Sampling and start Conversion*/
+	/* The DONE bit is set by hardware when the convert sequence
+	is finished. */
+	/* The ADIF bit will be set. */
+	AD1PCFG = 0xFFFB; // all PORTB = Digital; RB2 = analog
+	AD1CON1 = 0x00E0; // SSRC bit = 111 implies internal
+	// counter ends sampling and starts
+	// converting.
+	AD1CHS = 0x00020000; // Connect RB2/AN2 as CH0 input
+	// in this example RB2/AN2 is the input
+	AD1CSSL = 0;
+	AD1CON3 = 0x0203; // Sample time = 2 TAD
+	AD1CON2 = 0x6004; // Select external VREF+ and VREF- pins
+	// Interrupt after every 2 samples
+	AD1CON1bits.ADON = 1; // turn ON the ADC
+	while (1) // repeat continuously
+	{
+	ADCValue = 0; // clear value
+	ADC16Ptr = &ADC1BUF0; // initialize ADC1BUF0 pointer
+	IF1bits.AD1IF = 0; // clear ADC interrupt flag
+	AD1CON1bits.ASAM = 1; // auto start sampling
+	// for 31 TAD, and then go to conversion
+	while (!IFS0bits.ADIF); // conversion done?
+	AD1CON1bits.ASAM = 0; // yes, stop sample/convert
+	for (count = 0; count <2; count++)
+	{ // average the two
+	ADCValue = ADCValue + *ADC16Ptr++;
+	ADCValue = ADCValue >> 1;
 	}
+	} // repeat
 	return 0;
 }
