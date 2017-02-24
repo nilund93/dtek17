@@ -1,8 +1,6 @@
 #include <pic32mx.h>	/* Declarations of system-specific addresses etc */
 #include <stdint.h>		/* Declarations of uint_32 and the like */
 #include "mipslab.h"	/* Declatations for these labs */
-//#include <plib.h>
-//#include <nu32.h>
 char textbuffer[4][16];
 
 const uint8_t const font[] = {
@@ -162,6 +160,7 @@ void initiatePorts(){
 	//Initierar PORTD som INPUT för KNAPPAR och SWITCHAR.
 	TRISD = 0xf80f;
 
+
 	/* Från labb 3, verkar viktigt */
 	/* Set up peripheral bus clock */
         /* OSCCONbits.PBDIV = 1; */
@@ -200,29 +199,16 @@ void initiatePorts(){
 
 	/* Copy-Paste slutar */
 }
-void initadc(int channel){
-	//AD1CHSbits.CHOSA =channel; //select which channel to sample
-	//int maskchannel = channel << 16;
-	//AD1CHS= AD1CHS|maskchannel;
-	AD1CHS = AD1CHS|(channel << 16); //set  = channel
-	AD1PCFGCLR = 1 << channel; //configure pin for this channel to analog input
-	AD1CON1 = AD1CON1|0x8;	//On-bit
-	AD1CON1 = AD1CON1|0x2;	//Sample-bit
-	AD1CON1 &= ~0x01; //Done-bit
-	AD1CON2 = 0x0;
-	AD1CON3 |= (0x1 << 15);
-	//AD1CON1bits.ON = 1; //turn ADC on
-	//AD1CON1bits.SAMP = 1; //begin sampling
-	//AD1CON1bits.DONE = 0; // clear done-flag
-}
+
 int readadc(void){
     
     //AD1CON1bits.SAMP = 1;           // Begin sampling
     AD1CON1 &= ~0x02;	//end sampling, start converting
     //while( AD1CON1bits.SAMP );      // wait until acquisition is done
+    while(AD1CON1&0x02);
     
     //while( ! AD1CON1bits.DONE );    // wait until conversion done
- 	while( ! AD1CON1&0x01 );
+ 	while( ! (AD1CON1&0x01) );
  	AD1CON1 = AD1CON1|0x2; //resume sampling
  	AD1CON1 &= ~0x01; //clear Done-flag
     return ADC1BUF0;                // result stored in ADC1BUF0
@@ -410,22 +396,56 @@ int humidity(){
 }
 int main() {
 	initiatePorts();
+
+	/* INITIERING ADC */
+		//24e Februari
+	AD1CON1CLR = 0x8000;
+	//STEG 1 OCKSÅ
+	//TRISB |= 0x4; //sätter Trisb2 till input <- DET ÄR NÖDVÄNDIGTVIS INTE TRISB2 SOM GÄLLER
+	int channel = 4; 
+	AD1PCFGCLR = 1 << channel; //configure pin for this channel to analog input STEG 1
+	TRISE |= 0x8;
+	//AD1CHS |= (channel << 16); //sets CHOSA = channel STEG 2
+	//AD1CHS |= (channel << 24); //sets CHOSB = channel STEG 2
+	AD1CHSSET = 0x4040000;
+	TRISBSET = 4; 
+	AD1CON1 |= (0x4 << 8); //sets FORM of AD1CON to 32bit
+	AD1CON1 |= (0x7 << 5) ; //sets SSRC, Sample Clock Source, to 111
+	AD1CON2 = 0x1; //Set VCFG to 0, CSCNA = 0, BUFM = 0, ALTS = 1,  along with everything else
+	AD1CON3 |= (0x1 << 15); //Set ADRC to 1 for oscillator as clock source
+	//AD1CON3 |= (0xC << 8); //Set TAD to 12 (SAMC)
+
+	//AD1CHSbits.CHOSA =channel; //select which channel to sample
+	//int maskchannel = channel << 16;
+	//AD1CHS= AD1CHS|maskchannel;
+
+	
+	AD1CON1 |= (0x1 << 15);	//On-bit till 1
+	AD1CON1 |= (0x1 << 1);	//Sample-bit till 1
+	AD1CON1 &= ~0x01; //Done-bit till 0
+	
+	//AD1CON1bits.ON = 1; //turn ADC on
+	//AD1CON1bits.SAMP = 1; //begin sampling
+	//AD1CON1bits.DONE = 0; // clear done-flag
+
+	/* Starta välkomstskärm */
 	displayWelcome();
-	int derp = 0;
+	
 	//ANSELBbits.ANSB1 = 1;   // set RB3 (AN5) to analog, onödig för vårt kort
     //TRISBbits.TRISB1 = 1;   // set RB3 as an input
     //TRISB = TRISB|0x8;   // set RB5 as an input since RB5 is TRISB5
-    initadc(5); //Vill ha channel
+    initadc(3); //Vill ha channel
     //adcConfigureManual();
-    AD1CON1SET = 0x8000;
-    quicksleep(100000);
+    //AD1CON1SET = 0x8000;
+    //quicksleep(100000);
 	while(1){
 		//display_string(3, itoaconv(derp));
-		display_string(2, itoaconv(PORTB));
+		display_string(1, itoaconv(ADC1BUF0));
+		display_string(2, itoaconv(PORTE));
 		display_string(3, itoaconv(readadc()));
 		display_update();
 		quicksleep(100000);
-		derp++;
+
 		//humidity();
 		//checkTime();
 		//displayLights();
