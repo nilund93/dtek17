@@ -200,6 +200,28 @@ void initiatePorts(){
 	/* Copy-Paste slutar */
 }
 
+/*int readadc(void){
+    
+    //AD1CON1bits.SAMP = 1;           // Begin sampling
+    AD1CON1 &= ~0x02;	//end sampling, start converting
+    //while( AD1CON1bits.SAMP );      // wait until acquisition is done
+    while(AD1CON1&0x02);
+    
+    //while( ! AD1CON1bits.DONE );    // wait until conversion done
+ 	while( ! (AD1CON1&0x01) );
+ 	AD1CON1 = AD1CON1|0x2; //resume sampling
+ 	AD1CON1 &= ~0x01; //clear Done-flag
+    return ADC1BUF0;                // result stored in ADC1BUF0
+} */
+/*
+void adcConfigureManual(){
+    AD1CON1CLR = 0x8000;    // disable ADC before configuration
+ 
+    AD1CON1 = 0x00E0;       // internal counter ends sampling and starts conversion (auto-convert), manual sample
+    AD1CON2 = 0;            // AD1CON2<15:13> set voltage reference to pins AVSS/AVDD
+    AD1CON3 = 0x0f01;       // TAD = 4*TPB, acquisition time = 15*TAD 
+}
+*/
 /* Copy-paste från labb 3 börjar */
 /* Declare a helper function which is local to this file */
 static void num32asc( char * s, int ); 
@@ -365,55 +387,83 @@ int getbtns(void){
 	btns = btns & 0x7;
 	return btns;
 }
+int humidity(){
+	//int bla = PORTE >> 4;
+	//bla = bla & 0xA;
+	int value;
+	//value = readadc(); //Kalla på RB5 (AN5) på pin 11 där fuktighetsmodulen är inkopplad.
+	return value;
+}
 int main() {
 	initiatePorts();
 
 	/* INITIERING ADC */
-	//Turn off the ADC
+		//24e Februari
 	AD1CON1CLR = 0x8000;
-	 
-	//int channel = 0x8, alltså fjärde biten i byten; 
-	//säger åt ADCn att pin 8 är analog (sätter ad1pcfg<8> till 0)
-	AD1PCFG = ~(1 << 8);
-	//TRISE |= 0x8;
-	TRISB |= 0x100; //A2 finns på PORTB bit 8, sätt A2 som input
-	//AD1CHS |= (channel << 16); //sets CHOSA = channel
-	//AD1CHS |= (channel << 24); //sets CHOSB = channel
-	//Sätter CHOSA och CHOSB till 0x8 för bestämma var vi läser ifrån
-	AD1CHS = (0x8 << 16 ) | (0x8 << 24);
-
+	//STEG 1 OCKSÅ
+	//TRISB |= 0x4; //sätter Trisb2 till input 
+	//int channel = 8; 
+	//AD1PCFGCLR = 1 << channel; //configure pin for this channel to analog input STEG 1
+	AD1PCFG |= 0x8;
+	TRISE |= 0x8;
+	TRISB |= 0x8; //A2 finns på PORTB bit 8, sätt A2 som input
+	//AD1CHS |= (channel << 16); //sets CHOSA = channel STEG 2
+	//AD1CHS |= (channel << 24); //sets CHOSB = channel STEG 2
+	AD1CHSSET = 0x4040000;
+	//TRISBSET = 8; 
 	AD1CON1 |= (0x4 << 8); //sets FORM of AD1CON to 32bit
-	AD1CON1 |= (0x7 << 5); //sets SSRC, Sample Clock Source, to 111, 0x7
+	AD1CON1 |= (0x7 << 5) ; //sets SSRC, Sample Clock Source, to 111
 	AD1CON2 = 0x1; //Set VCFG to 0, CSCNA = 0, BUFM = 0, ALTS = 1,  along with everything else
 	AD1CON3 |= (0x1 << 15); //Set ADRC to 1 for oscillator as clock source
 	//AD1CON3 |= (0xC << 8); //Set TAD to 12 (SAMC)
 
+	//AD1CHSbits.CHOSA =channel; //select which channel to sample
+	//int maskchannel = channel << 16;
+	//AD1CHS= AD1CHS|maskchannel;
 
 	
-	AD1CON1 |= 0x8000;		//turn on ADC
-	AD1CON1 |= (0x1 << 1);	//start Sampling
-	AD1CON1 &= ~0x01; 		//clear Done-flag
+	AD1CON1 |= (0x1 << 15);	//On-bit till 1
+
 	
+	//AD1CON1bits.ON = 1; //turn ADC on
+	//AD1CON1bits.SAMP = 1; //begin sampling
+	//AD1CON1bits.DONE = 0; // clear done-flag
 
 	/* Starta välkomstskärm */
 	displayWelcome();
-
+	
+	//ANSELBbits.ANSB1 = 1;   // set RB3 (AN5) to analog, onödig för vårt kort
+    //TRISBbits.TRISB1 = 1;   // set RB3 as an input
+    //TRISB = TRISB|0x8;   // set RB5 as an input since RB5 is TRISB5
+    //initadc(3); //Vill ha channel
+    //adcConfigureManual();
+    //AD1CON1SET = 0x8000;
     quicksleep(100000);
 	while(1){
+		AD1CON1 |= (0x1 << 1);	//Sample-bit till 1
+		AD1CON1 &= ~0x01; //Done-bit till 0
 
-	    AD1CON1 &= ~0x02;				//end sampling, start converting
-	    while(AD1CON1&0x02);			//wait until we have 10 bits of information
-	    								//"wait until acquistition is done"
+		//AD1CON1bits.SAMP = 1;           // Begin sampling
+	    AD1CON1 &= ~0x02;	//end sampling, start converting
+	    //while( AD1CON1bits.SAMP );      // wait until acquisition is done
+	    while(AD1CON1&0x02);
 	    
-	 	while( ! (AD1CON1&0x01) );		//wait for conversion being finished
-	 									//aka, wait for Done-bit turning into 1
+	    //while( ! AD1CON1bits.DONE );    // wait until conversion done
+	 	while( ! (AD1CON1&0x01) );
+	 	AD1CON1 = AD1CON1|0x2; //resume sampling
+	 	AD1CON1 &= ~0x01; //clear Done-flag
 
-	 	AD1CON1 = AD1CON1|0x2; 			//resume sampling
-	 	AD1CON1 &= ~0x01; 				//clear Done-flag
-
+		//display_string(3, itoaconv(derp));
 		display_string(1, itoaconv(ADC1BUF0));
+		display_string(2, itoaconv(PORTB));
+		//display_string(3, itoaconv(readadc()));
 		display_update();
 		quicksleep(100000);
+
+		//humidity();
+		//checkTime();
+		//displayLights();
+		//displayMessage();
 	}
 	return 0;
 }
