@@ -2,7 +2,16 @@
 #include <stdint.h>		/* Declarations of uint_32 and the like */
 #include "mipslab.h"	/* Declatations for these labs */
 char textbuffer[4][16];
-
+char textstring[] = "durr, more durr";
+#define TMR2PERIOD ((80000000 / 256) / 10)
+#if TMR2PERIOD > 0xffff
+#error "Timer period is too big."
+#endif
+int mytime = 0x0000;
+int timeoutcount=0;
+int maxtime = 0x0010;
+int blinkcount = 0; //blinkcounter for pause
+int blinkcount2 = 0; //blinkcounter for running
 const uint8_t const font[] = {
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
@@ -152,15 +161,11 @@ const uint8_t const icon[] = {
 	132, 59, 192, 27, 164, 74, 177, 70,
 	184, 69, 186, 69, 254, 80, 175, 217,
 };
-
 void initiatePorts(){
-	//Initierar PORTE som INPUT för LEDs
-	TRISE = 0xfff8;
-	//TRISESET = 0xfff8;
+
+
 	//Initierar PORTD som INPUT för KNAPPAR och SWITCHAR.
-	TRISD = 0xf80f;
-
-
+	TRISD = 0xffff;
 	/* Från labb 3, verkar viktigt */
 	/* Set up peripheral bus clock */
         /* OSCCONbits.PBDIV = 1; */
@@ -170,9 +175,10 @@ void initiatePorts(){
 	/* Set up output pins */
 	AD1PCFG = 0xFFFF;
 	ODCE = 0x0;
+
+	//Initierar PORTE som OUTPUT för LEDs
 	TRISECLR = 0xFF;
-	PORTE = 0x0;
-	
+
 	/* Output pins for display signals */
 	PORTF = 0xFFFF;
 	PORTG = (1 << 9);
@@ -197,6 +203,12 @@ void initiatePorts(){
 	/* SPI2CON bit ON = 1; */
 	SPI2CONSET = 0x8000;
 
+
+  	T2CON = 0x70;
+  	PR2 = TMR2PERIOD;
+
+  	/* Start the timer */  
+  	T2CONSET = 0x8000; 
 	/* Copy-Paste slutar */
 }
 
@@ -349,10 +361,10 @@ void displayWelcome(){
 		2. Strängar skrivs till skärmen.
 		3. Skärmen uppdateras med strängarna. */
 	display_init();
-	display_string(0, "Rad 0");
-	display_string(1, "Rad 1");
-	display_string(2, "Rad 2");
-	display_string(3, "Welcome!");
+	//display_string(0, "Rad 0");
+	//display_string(1, "Rad 1");
+	//display_string(2, "Rad 2");
+	//display_string(3, "Welcome!");
 	display_update();
 }
 int getsw(void){
@@ -360,11 +372,44 @@ int getsw(void){
 	switches = switches & 0xf;
 	return switches;		
 }
-int getbtns(void){
+/*int getbtns(void){
 	int btns = PORTD >> 5;
 	btns = btns & 0x7;
 	return btns;
+}*/
+
+/* Timer-relaterade funktioner */
+/* tick är ej vår funktion (hämtad från labb 3) */
+void tick( unsigned int * timep )
+{
+  /* Get current value, store locally */
+  register unsigned int t = * timep;
+  t += 1; /* Increment local copy */
+  
+  /* If result was not a valid BCD-coded time, adjust now */
+
+  if( (t & 0x0000000f) >= 0x0000000a ) t += 0x00000006;
+  if( (t & 0x000000f0) >= 0x00000060 ) t += 0x000000a0;
+  /* Seconds are now OK */
+
+  if( (t & 0x00000f00) >= 0x00000a00 ) t += 0x00000600;
+  if( (t & 0x0000f000) >= 0x00006000 ) t += 0x0000a000;
+  /* Minutes are now OK */
+
+  if( (t & 0x000f0000) >= 0x000a0000 ) t += 0x00060000;
+  if( (t & 0x00ff0000) >= 0x00240000 ) t += 0x00dc0000;
+  /* Hours are now OK */
+
+  if( (t & 0x0f000000) >= 0x0a000000 ) t += 0x06000000;
+  if( (t & 0xf0000000) >= 0xa0000000 ) t = 0;
+  /* Days are now OK */
+
+  * timep = t; /* Store new value */
 }
+
+
+
+/* Huvudprogram */ 
 int main() {
 	initiatePorts();
 
@@ -375,8 +420,9 @@ int main() {
 	//int channel = 0x8, alltså fjärde biten i byten; 
 	//säger åt ADCn att pin 8 är analog (sätter ad1pcfg<8> till 0)
 	AD1PCFG = ~(1 << 8);
-	//TRISE |= 0x8;
+
 	TRISB |= 0x100; //A2 finns på PORTB bit 8, sätt A2 som input
+	
 	//AD1CHS |= (channel << 16); //sets CHOSA = channel
 	//AD1CHS |= (channel << 24); //sets CHOSB = channel
 	//Sätter CHOSA och CHOSB till 0x8 för bestämma var vi läser ifrån
@@ -397,23 +443,120 @@ int main() {
 
 	/* Starta välkomstskärm */
 	displayWelcome();
-
+	int sw = getsw();
     quicksleep(100000);
-	while(1){
+	for(;;){
+		
+		AD1CON1 &= ~0x02;				//end sampling, start converting
+		while(AD1CON1&0x02);			//wait until we have 10 bits of information
+		    							//"wait until acquistition is done"
+		    
+		while( ! (AD1CON1&0x01) );		//wait for conversion being finished
+		 								//aka, wait for Done-bit turning into 1
 
-	    AD1CON1 &= ~0x02;				//end sampling, start converting
-	    while(AD1CON1&0x02);			//wait until we have 10 bits of information
-	    								//"wait until acquistition is done"
-	    
-	 	while( ! (AD1CON1&0x01) );		//wait for conversion being finished
-	 									//aka, wait for Done-bit turning into 1
+		AD1CON1 = AD1CON1|0x2; 			//resume sampling
+		AD1CON1 &= ~0x01; 				//clear Done-flag
+		if(sw & 0x1 == 0x1){
 
-	 	AD1CON1 = AD1CON1|0x2; 			//resume sampling
-	 	AD1CON1 &= ~0x01; 				//clear Done-flag
+			mytime = 0x0;
+			display_string(0, "How you feeling?");
+			int mooooist = ADC1BUF0;
+			if (mooooist <300){
+				if(IFS(0) & 0x100){
+					blinkcount2++;
+					if(blinkcount2 % 10 == 0){
+						blinkcount2 = 0;
+						PORTE = 0x01;
+					}
+					else{
+						PORTE = 0x0;
+					}
+					IFS(0) = 0;
+				}	
+				display_string(1, "I´m Super-moist");
+				display_string(2, "Please no Water");
+				display_string(3, "Leave me alone");
+				display_update();
 
-		display_string(1, itoaconv(ADC1BUF0));
-		display_update();
-		quicksleep(100000);
+			}
+			else if(mooooist > 299 && mooooist <500){
+				if(IFS(0) & 0x100){
+					blinkcount2++;
+					if(blinkcount2 % 7 == 0){
+						PORTE = 0x55; //ska blinka
+					}
+					else{
+						PORTE = 0x0;
+					}
+					IFS(0) = 0;
+				}
+				display_string(1, "I´m lagom");
+				display_string(2, "Happy for now");
+				display_string(3, "Please dont go");
+				display_update();
+
+			}
+			else{
+				if(IFS(0) & 0x100){
+					blinkcount2++;
+					if(blinkcount2 % 5 == 0){
+						PORTE = 0xFF; //ska blinka
+					}
+					else{
+						PORTE = 0x0;
+					}
+					IFS(0) = 0;
+				}
+
+				display_string(1, "I´m DRYY");
+				display_string(2, "Water me...");
+				display_string(3, "Or I´ll die....");
+				display_update();
+			}
+
+		}
+
+		else {
+			//Om timern tickar.
+			if(IFS(0) & 0x100){
+				if(maxtime <= mytime){
+					if (blinkcount == 1){
+						PORTE = 0xFF;
+					}
+					else{
+						PORTE = 0xAA;
+						blinkcount = 0;
+					}
+				}
+				timeoutcount++;
+				if((timeoutcount % 10) == 0){
+					/*  Konvertera mytime till sträng
+						Skriv ut till skärmen
+						Ticka klockan */
+						timeoutcount = 0;
+						blinkcount++;
+						time2string(textstring, mytime);
+						display_string(1, textstring);
+						display_update();
+						tick(&mytime);
+
+				}
+				else{
+					PORTE = 0x0;	
+				}
+				IFS(0) = 0;
+
+			}
+
+			display_string(0,"Paused, timer:");
+			display_string(2, "Start by turning");
+			display_string(3, "switch 1 on");
+			display_update();
+			//Räkna timer, om timer gått för långt, börja lysa med alla LEDS
+		}
+		
+		
+		sw = getsw();
 	}
 	return 0;
 }
