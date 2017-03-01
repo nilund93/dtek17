@@ -2,16 +2,18 @@
 #include <stdint.h>		/* Declarations of uint_32 and the like */
 #include "mipslab.h"	/* Declatations for these labs */
 char textbuffer[4][16];
-char textstring[] = "durr, more durr";
-#define TMR2PERIOD ((80000000 / 256) / 10)
+char textstring[] = "Vi gillar D-TEK";
+#define TMR2PERIOD ((80000000 / 256) / 10) //Timerperioden, samma som i lab3
 #if TMR2PERIOD > 0xffff
 #error "Timer period is too big."
 #endif
-int mytime = 0x0000;
-int timeoutcount=0;
-int maxtime = 0x0010;
-int blinkcount = 0; //blinkcounter for pause
-int blinkcount2 = 0; //blinkcounter for running
+
+int mytime = 0x0000; 	//timerns tid
+int maxtime = 0x0010; 	//tiden då användaren pausat för länge
+int timeoutcount=0;		//interrupträknare för sekunder
+int blinkcount = 0; 	//blinkcounter for pause
+int blinkcount2 = 0; 	//blinkcounter for running
+
 const uint8_t const font[] = {
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
@@ -143,28 +145,8 @@ const uint8_t const font[] = {
 	0, 120, 68, 66, 68, 120, 0, 0,
 };
 
-const uint8_t const icon[] = {
-	255, 255, 255, 255, 255, 255, 127, 187,
-	68, 95, 170, 93, 163, 215, 175, 95,
-	175, 95, 175, 95, 223, 111, 175, 247,
-	59, 237, 242, 254, 171, 254, 1, 255,
-	255, 255, 15, 211, 109, 58, 253, 8,
-	178, 77, 58, 199, 122, 197, 242, 173,
-	242, 237, 186, 215, 40, 215, 41, 214,
-	35, 175, 91, 212, 63, 234, 149, 111,
-	171, 84, 253, 252, 254, 253, 126, 184,
-	195, 52, 201, 22, 225, 27, 196, 19,
-	165, 74, 36, 146, 72, 162, 85, 8,
-	226, 25, 166, 80, 167, 216, 167, 88,
-	106, 149, 161, 95, 135, 91, 175, 87,
-	142, 123, 134, 127, 134, 121, 134, 121,
-	132, 59, 192, 27, 164, 74, 177, 70,
-	184, 69, 186, 69, 254, 80, 175, 217,
-};
 void initiatePorts(){
-
-
-	//Initierar PORTD som INPUT för KNAPPAR och SWITCHAR.
+	//Initierar PORTD som INPUT för (KNAPPAR och) SWITCHAR.
 	TRISD = 0xffff;
 	/* Från labb 3, verkar viktigt */
 	/* Set up peripheral bus clock */
@@ -210,6 +192,33 @@ void initiatePorts(){
   	/* Start the timer */  
   	T2CONSET = 0x8000; 
 	/* Copy-Paste slutar */
+
+  	//Egen kod
+	/* INITIERING ADC */
+	//Turn off the ADC
+	AD1CON1CLR = 0x8000;
+	 
+	//int channel = 0x8, alltså fjärde biten i byten; 
+	//säger åt ADCn att pin 8 är analog (sätter ad1pcfg<8> till 0)
+	AD1PCFG = ~(1 << 8);
+
+	TRISB |= 0x100; //A2 finns på PORTB bit 8, sätt A2 som input
+	
+	//AD1CHS |= (channel << 16); //sets CHOSA = channel
+	//AD1CHS |= (channel << 24); //sets CHOSB = channel
+	//Sätter CHOSA och CHOSB till 0x8 för bestämma var vi läser ifrån
+	AD1CHS = (0x8 << 16 ) | (0x8 << 24);
+
+	/* AD1CON1bits.FORM = 010 , AD1CON1< */
+	AD1CON1 |= (0x4 << 8); //sets FORM of AD1CON to 32bit
+	AD1CON1 |= (0x7 << 5); //sets SSRC, Sample Clock Source, to 111, 0x7
+	AD1CON2 = 0x1; //Set VCFG to 0, CSCNA = 0, BUFM = 0, ALTS = 1,  along with everything else
+	AD1CON3 |= (0x1 << 15); //Set ADRC to 1 for oscillator as clock source
+	//AD1CON3 |= (0xC << 8); //Set TAD to 12 (SAMC)
+	
+	AD1CON1 |= 0x8000;		//turn on ADC
+	AD1CON1 |= (0x1 << 1);	//start Sampling
+	AD1CON1 &= ~0x01; 		//clear Done-flag
 }
 
 /* Copy-paste från labb 3 börjar */
@@ -243,15 +252,15 @@ uint8_t spi_send_recv(uint8_t data) {
 	return SPI2BUF;
 }
 void display_init(void){
-  	DISPLAY_CHANGE_TO_COMMAND_MODE;
+  	DISPLAY_CHANGE_TO_COMMAND_MODE; //Clear PortF<4>
 	quicksleep(10);
-	DISPLAY_ACTIVATE_VDD;
+	DISPLAY_ACTIVATE_VDD; //Clear PortF<6>
 	quicksleep(1000000);
 	
 	spi_send_recv(0xAE);
-	DISPLAY_ACTIVATE_RESET;
+	DISPLAY_ACTIVATE_RESET; //Clear PortG<9>
 	quicksleep(10);
-	DISPLAY_DO_NOT_RESET;
+	DISPLAY_DO_NOT_RESET; //Set PortG<9>
 	quicksleep(10);
 	
 	spi_send_recv(0x8D);
@@ -260,7 +269,7 @@ void display_init(void){
 	spi_send_recv(0xD9);
 	spi_send_recv(0xF1);
 	
-	DISPLAY_ACTIVATE_VBAT;
+	DISPLAY_ACTIVATE_VBAT; //Clear PortF<5>
 	quicksleep(10000000);
 	
 	spi_send_recv(0xA1);
@@ -271,6 +280,7 @@ void display_init(void){
 	
 	spi_send_recv(0xAF);
 }
+//Bestämmer begränsningarna för displayen, antal rader och tecken
 void display_string(int line, char *s){
 	int i;
 	if(line < 0 || line >= 4)
@@ -286,8 +296,8 @@ void display_string(int line, char *s){
 			textbuffer[line][i] = ' ';
 }
 void display_update(void) {
-	int i, j, k;
-	int c;
+	int c, i, j, k;
+	//int c;
 	for(i = 0; i < 4; i++) {
 		DISPLAY_CHANGE_TO_COMMAND_MODE;
 		spi_send_recv(0x22);
@@ -346,40 +356,23 @@ char * itoaconv( int num )
 /* Copy paste slutar */
 
 
-void checkTime(){
-
-}
-void displayLights(){
-
-}
-void displayMessage(){
-
-}
 void displayWelcome(){
 	/* Funktionen fungerar såhär:
 		1. Displayen startas
 		2. Strängar skrivs till skärmen.
 		3. Skärmen uppdateras med strängarna. */
-	display_init();
-	//display_string(0, "Rad 0");
-	//display_string(1, "Rad 1");
-	//display_string(2, "Rad 2");
-	//display_string(3, "Welcome!");
-	display_update();
+	//display_init();
+	
+	//display_update();
 }
 int getsw(void){
 	int switches = PORTD >> 8;
 	switches = switches & 0xf;
 	return switches;		
 }
-/*int getbtns(void){
-	int btns = PORTD >> 5;
-	btns = btns & 0x7;
-	return btns;
-}*/
 
-/* Timer-relaterade funktioner */
-/* tick är ej vår funktion (hämtad från labb 3) */
+// Timer-relaterade funktioner 
+// tick hämtad från labb 3 given kod i labb 3 
 void tick( unsigned int * timep )
 {
   /* Get current value, store locally */
@@ -411,46 +404,19 @@ void tick( unsigned int * timep )
 
 /* Huvudprogram */ 
 int main() {
+	//Initierar portarna
 	initiatePorts();
-
-	/* INITIERING ADC */
-	//Turn off the ADC
-	AD1CON1CLR = 0x8000;
-	 
-	//int channel = 0x8, alltså fjärde biten i byten; 
-	//säger åt ADCn att pin 8 är analog (sätter ad1pcfg<8> till 0)
-	AD1PCFG = ~(1 << 8);
-
-	TRISB |= 0x100; //A2 finns på PORTB bit 8, sätt A2 som input
-	
-	//AD1CHS |= (channel << 16); //sets CHOSA = channel
-	//AD1CHS |= (channel << 24); //sets CHOSB = channel
-	//Sätter CHOSA och CHOSB till 0x8 för bestämma var vi läser ifrån
-	AD1CHS = (0x8 << 16 ) | (0x8 << 24);
-
-	AD1CON1 |= (0x4 << 8); //sets FORM of AD1CON to 32bit
-	AD1CON1 |= (0x7 << 5); //sets SSRC, Sample Clock Source, to 111, 0x7
-	AD1CON2 = 0x1; //Set VCFG to 0, CSCNA = 0, BUFM = 0, ALTS = 1,  along with everything else
-	AD1CON3 |= (0x1 << 15); //Set ADRC to 1 for oscillator as clock source
-	//AD1CON3 |= (0xC << 8); //Set TAD to 12 (SAMC)
-
-
-	
-	AD1CON1 |= 0x8000;		//turn on ADC
-	AD1CON1 |= (0x1 << 1);	//start Sampling
-	AD1CON1 &= ~0x01; 		//clear Done-flag
+	//Startar displayen
+	display_init();
+	display_update();
 	
 
-	/* Starta välkomstskärm */
-	displayWelcome();
 	int sw = getsw();
-    quicksleep(100000);
 	for(;;){
 		
 		AD1CON1 &= ~0x02;				//end sampling, start converting
 		while(AD1CON1&0x02);			//wait until we have 10 bits of information
 		    							//"wait until acquistition is done"
-		    
 		while( ! (AD1CON1&0x01) );		//wait for conversion being finished
 		 								//aka, wait for Done-bit turning into 1
 
@@ -517,8 +483,9 @@ int main() {
 		}
 
 		else {
-			//Om timern tickar.
+			//Om switchen är nere och timern tickar:
 			if(IFS(0) & 0x100){
+				//Räkna timer, om timer gått för långt, börja lysa med alla LEDS
 				if(maxtime <= mytime){
 					if (blinkcount == 1){
 						PORTE = 0xFF;
@@ -539,10 +506,9 @@ int main() {
 						display_string(1, textstring);
 						display_update();
 						tick(&mytime);
-
 				}
 				else{
-					PORTE = 0x0;	
+					PORTE = 0x0; //Släcker LEDs	
 				}
 				IFS(0) = 0;
 
@@ -552,10 +518,7 @@ int main() {
 			display_string(2, "Start by turning");
 			display_string(3, "switch 1 on");
 			display_update();
-			//Räkna timer, om timer gått för långt, börja lysa med alla LEDS
 		}
-		
-		
 		sw = getsw();
 	}
 	return 0;
