@@ -1,8 +1,10 @@
 #include <pic32mx.h>	/* Declarations of system-specific addresses etc */
 #include <stdint.h>		/* Declarations of uint_32 and the like */
 #include "mipslab.h"	/* Declatations for these labs */
+
 char textbuffer[4][16];
 char textstring[] = "Vi gillar D-TEK";
+
 #define TMR2PERIOD ((80000000 / 256) / 10) //Timerperioden, samma som i lab3
 #if TMR2PERIOD > 0xffff
 #error "Timer period is too big."
@@ -146,9 +148,9 @@ const uint8_t const font[] = {
 };
 
 void initiatePorts(){
-	//Initierar PORTD som INPUT för (KNAPPAR och) SWITCHAR.
+	//Initierar PORTD som INPUT för SWITCHAR.
 	TRISD = 0xffff;
-	/* Från labb 3, verkar viktigt */
+	/* Från labb 3 */
 	/* Set up peripheral bus clock */
         /* OSCCONbits.PBDIV = 1; */
     OSCCONCLR = 0x100000; /* clear PBDIV bit 1 */
@@ -163,7 +165,7 @@ void initiatePorts(){
 
 	/* Output pins for display signals */
 	PORTF = 0xFFFF;
-	PORTG = (1 << 9);
+	PORTG = (1 << 9); //sätter en etta på den nioende biten
 	ODCF = 0x0;
 	ODCG = 0x0;
 	TRISFCLR = 0x70;
@@ -212,7 +214,7 @@ void initiatePorts(){
 	/* AD1CON1bits.FORM = 010 , AD1CON1< */
 	AD1CON1 |= (0x4 << 8); //sets FORM of AD1CON to 32bit
 	AD1CON1 |= (0x7 << 5); //sets SSRC, Sample Clock Source, to 111, 0x7
-	AD1CON2 = 0x1; //Set VCFG to 0, CSCNA = 0, BUFM = 0, ALTS = 1,  along with everything else
+	AD1CON2 = 0x1; 			//Set VCFG to 0, CSCNA = 0, BUFM = 0, ALTS = 1,  along with everything else
 	AD1CON3 |= (0x1 << 15); //Set ADRC to 1 for oscillator as clock source
 	//AD1CON3 |= (0xC << 8); //Set TAD to 12 (SAMC)
 	
@@ -318,7 +320,7 @@ void display_update(void) {
 		}
 	}
 }
-
+/*
 #define ITOA_BUFSIZ ( 24 )
 char * itoaconv( int num )
 {
@@ -326,9 +328,9 @@ char * itoaconv( int num )
   static char itoa_buffer[ ITOA_BUFSIZ ];
   static const char maxneg[] = "-2147483648";
   
-  itoa_buffer[ ITOA_BUFSIZ - 1 ] = 0;   /* Insert the end-of-string marker. */
-  sign = num;                           /* Save sign. */
-  if( num < 0 && num - 1 > 0 )          /* Check for most negative integer */
+  itoa_buffer[ ITOA_BUFSIZ - 1 ] = 0;   // Insert the end-of-string marker. 
+  sign = num;                           // Save sign. 
+  if( num < 0 && num - 1 > 0 )          // Check for most negative integer 
   {
     for( i = 0; i < sizeof( maxneg ); i += 1 )
     itoa_buffer[ i + 1 ] = maxneg[ i ];
@@ -336,12 +338,12 @@ char * itoaconv( int num )
   }
   else
   {
-    if( num < 0 ) num = -num;           /* Make number positive. */
-    i = ITOA_BUFSIZ - 2;                /* Location for first ASCII digit. */
+    if( num < 0 ) num = -num;           // Make number positive. //
+    i = ITOA_BUFSIZ - 2;                // Location for first ASCII digit. //
     do {
-      itoa_buffer[ i ] = num % 10 + '0';/* Insert next digit. */
-      num = num / 10;                   /* Remove digit from number. */
-      i -= 1;                           /* Move index to next empty position. */
+      itoa_buffer[ i ] = num % 10 + '0';// Insert next digit. //
+      num = num / 10;                   // Remove digit from number. //
+      i -= 1;                           // Move index to next empty position. //
     } while( num > 0 );
     if( sign < 0 )
     {
@@ -349,22 +351,13 @@ char * itoaconv( int num )
       i -= 1;
     }
   }
-  /* Since the loop always sets the index i to the next empty position,
-   * we must add 1 in order to return a pointer to the first occupied position. */
+  // Since the loop always sets the index i to the next empty position,
+  //  we must add 1 in order to return a pointer to the first occupied position.
   return( &itoa_buffer[ i + 1 ] );
 }
+*/
 /* Copy paste slutar */
 
-
-void displayWelcome(){
-	/* Funktionen fungerar såhär:
-		1. Displayen startas
-		2. Strängar skrivs till skärmen.
-		3. Skärmen uppdateras med strängarna. */
-	//display_init();
-	
-	//display_update();
-}
 int getsw(void){
 	int switches = PORTD >> 8;
 	switches = switches & 0xf;
@@ -404,10 +397,8 @@ void tick( unsigned int * timep )
 
 /* Huvudprogram */ 
 int main() {
-	//Initierar portarna
-	initiatePorts();
-	//Startar displayen
-	display_init();
+	initiatePorts();	//Initierar portarna
+	display_init();		//Startar displayen
 	display_update();
 	
 
@@ -427,6 +418,8 @@ int main() {
 			mytime = 0x0;
 			display_string(0, "How you feeling?");
 			int mooooist = ADC1BUF0;
+
+			//Vattnad
 			if (mooooist <300){
 				if(IFS(0) & 0x100){
 					blinkcount2++;
@@ -445,11 +438,12 @@ int main() {
 				display_update();
 
 			}
-			else if(mooooist > 299 && mooooist <500){
-				if(IFS(0) & 0x100){
+			//Lagom vattnad
+			else if(mooooist > 299 && mooooist < 500){
+				if(IFS(0) & 0x100){			//När Interrupt-flaggan från timern IFS(0)<9> är 1. (T2IF)
 					blinkcount2++;
 					if(blinkcount2 % 7 == 0){
-						PORTE = 0x55; //ska blinka
+						PORTE = 0x55; 		//ska blinka
 					}
 					else{
 						PORTE = 0x0;
@@ -462,8 +456,9 @@ int main() {
 				display_update();
 
 			}
+			//Torr-Supertorr
 			else{
-				if(IFS(0) & 0x100){
+				if(IFS(0) & 0x100){ 
 					blinkcount2++;
 					if(blinkcount2 % 5 == 0){
 						PORTE = 0xFF; //ska blinka
@@ -487,13 +482,13 @@ int main() {
 			if(IFS(0) & 0x100){
 				//Räkna timer, om timer gått för långt, börja lysa med alla LEDS
 				if(maxtime <= mytime){
-					if (blinkcount == 1){
+					if (blinkcount % 2 == 1){
 						PORTE = 0xFF;
 					}
 					else{
 						PORTE = 0xAA;
-						blinkcount = 0;
 					}
+
 				}
 				timeoutcount++;
 				if((timeoutcount % 10) == 0){
